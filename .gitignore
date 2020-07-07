@@ -3,9 +3,15 @@
 *.txt
 
 *.jpg
+*.JPG
 *.png
+*.PNG
 *.gif
+*.GIF
 *.JPEG
 *.jpeg
 
 *.pth
+
+*.tar
+*.zip
