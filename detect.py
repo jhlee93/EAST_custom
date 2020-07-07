@@ -1,6 +1,7 @@
 import torch
 from torchvision import transforms
 from PIL import Image, ImageDraw
+import cv2
 from model import EAST
 import os
 from dataset import get_rotate_mat
@@ -27,7 +28,7 @@ def resize_img(img):
 def load_pil(img):
 	'''convert PIL Image to torch.Tensor
 	'''
-	t = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=(0.5,0.5,0.5),std=(0.5,0.5,0.5))])
+	t = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=(0.5,),std=(0.5,))])
 	return t(img).unsqueeze(0)
 
 
@@ -86,7 +87,7 @@ def restore_polys(valid_pos, valid_geo, score_shape, scale=4):
 	return np.array(polys), index
 
 
-def get_boxes(score, geo, score_thresh=0.9, nms_thresh=0.2):
+def get_boxes(score, geo, score_thresh=0.7, nms_thresh=0.4):
 	'''get boxes from feature map
 	Input:
 		score       : score map from model <numpy.ndarray, (1,row,col)>
@@ -98,6 +99,14 @@ def get_boxes(score, geo, score_thresh=0.9, nms_thresh=0.2):
 	'''
 	score = score[0,:,:]
 	xy_text = np.argwhere(score > score_thresh) # n x 2, format is [r, c]
+
+	scores = []
+	for i in xy_text:
+		scores.append(score[i[0]][i[1]])
+
+	# print('avg: {}, max: {}, min: {}'.format(sum(scores) / len(scores), max(scores), min(scores)))
+		
+
 	if xy_text.size == 0:
 		return None
 
@@ -131,7 +140,7 @@ def adjust_ratio(boxes, ratio_w, ratio_h):
 	return np.around(boxes)
 	
 	
-def detect(img, model, device):
+def detect(img, model, device, score_threshold, nms_threshold):
 	'''detect text regions of img using model
 	Input:
 		img   : PIL Image
@@ -143,19 +152,27 @@ def detect(img, model, device):
 	img, ratio_h, ratio_w = resize_img(img)
 	with torch.no_grad():
 		score, geo = model(load_pil(img).to(device))
-	boxes = get_boxes(score.squeeze(0).cpu().numpy(), geo.squeeze(0).cpu().numpy())
+	
+	# score, geo, score_thresh=0.5, nms_thresh=0.4
+	boxes = get_boxes(
+		score = score.squeeze(0).cpu().numpy(),
+		geo = geo.squeeze(0).cpu().numpy(),
+		score_thresh = score_threshold,
+		nms_thresh = nms_threshold)
 	return adjust_ratio(boxes, ratio_w, ratio_h)
 
 
-def plot_boxes(img, boxes):
+def plot_boxes(img, boxes, is_gt):
 	'''plot boxes on image
 	'''
 	if boxes is None:
 		return img
-	
+	color = (255,0,0)
+	if is_gt:
+		color = (0,0,255)
 	draw = ImageDraw.Draw(img)
 	for box in boxes:
-		draw.polygon([box[0], box[1], box[2], box[3], box[4], box[5], box[6], box[7]], outline=(0,255,0))
+		draw.polygon([box[0], box[1], box[2], box[3], box[4], box[5], box[6], box[7]], outline=color)
 	return img
 
 
@@ -181,17 +198,33 @@ def detect_dataset(model, device, test_img_path, submit_path):
 
 
 if __name__ == '__main__':
-	img_path    = '../ICDAR_2015/test_img/img_2.jpg'
-	model_path  = './pths/east_vgg16.pth'
-	res_img     = './res.bmp'
 	device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+	# model_path  = './pths/ENKR_epoch_50.
+	model_path  = './pths/ENKR_epoch_198.pth'
+
 	model = EAST().to(device)
 	model.load_state_dict(torch.load(model_path))
 	model.eval()
-	img = Image.open(img_path)
-	
-	boxes = detect(img, model, device)
-	plot_img = plot_boxes(img, boxes)	
-	plot_img.save(res_img)
+
+	image_folder = './airlab_input/'
+	image_list = [x for x in os.listdir(image_folder) if x.split('.')[1] == 'jpg']
+	for i in image_list[:1]:
+		img_path = image_folder + i
+		res_img = './output/' + i
+		img = Image.open(img_path)
+		
+		# Detection
+		boxes = detect(img, model, device, score_threshold=0.99999, nms_threshold=0.2)
+		print(i, len(boxes))
+
+		# Plot
+		plot_img = plot_boxes(img, boxes, False) # draw boxes
+		plot_img = plot_img.convert('RGB')
+		plot_img = np.array(plot_img)
+		plot_img = cv2.cvtColor(plot_img, cv2.COLOR_RGB2BGR)
+		plot_img = cv2.putText(plot_img, 'bBox : '+str(len(boxes)), (10,50),
+								cv2.FONT_HERSHEY_COMPLEX_SMALL, 3., (0,0,255), 2)
+		# plot_img.save(res_img)
+		cv2.imwrite('./output/conf099999_' + i, plot_img)
 
 

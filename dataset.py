@@ -219,10 +219,11 @@ def crop_img(img, vertices, labels, length):
 		start_w = int(np.random.rand() * remain_w)
 		start_h = int(np.random.rand() * remain_h)
 		flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
+
 	box = (start_w, start_h, start_w + length, start_h + length)
 	region = img.crop(box)
 	if new_vertices.size == 0:
-		return region, new_vertices	
+		return region, new_vertices
 	
 	new_vertices[:,[0,2,4,6]] -= start_w
 	new_vertices[:,[1,3,5,7]] -= start_h
@@ -271,6 +272,7 @@ def adjust_height(img, vertices, ratio=0.2):
 	new_vertices = vertices.copy()
 	if vertices.size > 0:
 		new_vertices[:,[1,3,5,7]] = vertices[:,[1,3,5,7]] * (new_h / old_h)
+
 	return img, new_vertices
 
 
@@ -392,5 +394,5 @@ class custom_dataset(data.Dataset):
                                         transforms.Normalize(mean=(0.5,0.5,0.5),std=(0.5,0.5,0.5))])
 		
 		score_map, geo_map, ignored_map = get_score_geo(img, vertices, labels, self.scale, self.length)
-		return transform(img), score_map, geo_map, ignored_map
 
+		return transform(img), score_map, geo_map, ignored_map

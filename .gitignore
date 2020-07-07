@@ -1,0 +1,11 @@
+*.csv
+*.json
+*.txt
+
+*.jpg
+*.png
+*.gif
+*.JPEG
+*.jpeg
+
+*.pth
